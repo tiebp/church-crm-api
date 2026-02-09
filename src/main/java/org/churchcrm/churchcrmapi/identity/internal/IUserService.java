@@ -41,11 +41,10 @@ class UserService implements IUserService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    @Transactional
     public void createUser(ChurchCreated event) {
         var userDto = this.mapper.toDto(event);
         var created = this.createUser(userDto, event.getChurchId(), true);
-        
+
         // Publish UserCreated event
         var userEvent = mapper.toUserCreated(created);
         eventPublisher.publishEvent(userEvent);
@@ -128,8 +127,8 @@ class UserService implements IUserService {
             // Extract created user ID from Location header
             String location = response.getLocation().toString();
             String userId = location.substring(location.lastIndexOf("/") + 1);
-            
-            log.info("User created successfully in Keycloak: username={}, organization-id={}, groups={}", 
+
+            log.info("User created successfully in Keycloak: username={}, organization-id={}, groups={}",
                 username, organizationId, groups);
             return userId;
         }
@@ -139,12 +138,12 @@ class UserService implements IUserService {
     public UserDto getById(UUID id, UUID organizationId) {
         User user = repository.findById(id)
             .orElseThrow(() -> new NotFoundException("User", id));
-        
+
         // Security: verify organization match
         if (!user.getChurchId().equals(organizationId)) {
             throw new NotFoundException("User", id);  // 404, not 403
         }
-        
+
         return mapper.toDto(user);
     }
 

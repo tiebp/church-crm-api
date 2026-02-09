@@ -1,5 +1,6 @@
 package org.churchcrm.churchcrmapi.identity.internal;
 
+import org.churchcrm.churchcrmapi.crosscutting.web.OrganizationId;
 import org.churchcrm.churchcrmapi.identity.CreateUserDto;
 import org.churchcrm.churchcrmapi.identity.UserDto;
 import org.junit.jupiter.api.Test;
