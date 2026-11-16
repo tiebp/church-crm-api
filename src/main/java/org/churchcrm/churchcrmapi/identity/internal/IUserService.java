@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.UUID;
 import jakarta.ws.rs.core.Response;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 public interface IUserService {
     void createUser(ChurchCreated event);
@@ -41,7 +40,6 @@ class UserService implements IUserService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
-    @Transactional
     public void createUser(ChurchCreated event) {
         var userDto = this.mapper.toDto(event);
         var created = this.createUser(userDto, event.getChurchId(), true);
@@ -52,22 +50,21 @@ class UserService implements IUserService {
     }
 
     @Override
-    @Transactional
     public UserDto createUser(CreateUserDto dto, UUID organizationId, boolean firstUser) {
         // Validation - check uniqueness constraints
-        if (repository.existsByUsernameAndChurchId(dto.getUsername(), organizationId)) {
+        if (repository.existsByUsernameAndChurchId(dto.username(), organizationId)) {
             throw new ConflictException(
                 "User with this username already exists in this organization",
                 "username",
-                dto.getUsername()
+                dto.username()
             );
         }
 
-        if (repository.existsByEmailAndChurchId(dto.getEmail(), organizationId)) {
+        if (repository.existsByEmailAndChurchId(dto.email(), organizationId)) {
             throw new ConflictException(
                 "User with this email already exists in this organization",
                 "email",
-                dto.getEmail()
+                dto.email()
             );
         }
 
@@ -75,9 +72,9 @@ class UserService implements IUserService {
 
         // Create user in Keycloak first
         String keycloakUserId = createKeycloakUser(
-            dto.getUsername(),
-            dto.getEmail(),
-            dto.getFullname(),
+            dto.username(),
+            dto.email(),
+            dto.fullname(),
             organizationId,
             groups
         );
@@ -150,7 +147,7 @@ class UserService implements IUserService {
 
     @Override
     public UserDto getByEmail(String email) {
-        return repository.findByEmail(email)
+        return repository.findFirstByEmail(email)
             .map(mapper::toDto)
             .orElse(null);
     }
@@ -185,7 +182,7 @@ class UserService implements IUserService {
         CredentialRepresentation credential = new CredentialRepresentation();
         credential.setType(CredentialRepresentation.PASSWORD);
         credential.setValue("password");
-        credential.setTemporary(false);
+        credential.setTemporary(true);
 
         user.setCredentials(Collections.singletonList(credential));
     }

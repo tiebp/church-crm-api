@@ -149,6 +149,22 @@ class UserCreationIntegrationTest {
     }
 
     @Test
+    void createUser_WithoutAdminRole_ShouldReturnForbidden() throws Exception {
+        // Given
+        var dto = new CreateUserDto("testuser", "Test User", "test@example.com");
+        UUID organizationId = UUID.randomUUID();
+
+        // When/Then
+        mockMvc.perform(post("/users")
+                        .with(JwtTestDsl.jwt()
+                                .organization(organizationId)
+                                .build())
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void getUser_WithValidId_ShouldReturnUser() throws Exception {
         // Given
         var faker = new Faker();

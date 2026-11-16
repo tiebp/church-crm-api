@@ -19,10 +19,10 @@ public interface UserMapper {
      * Converts entity to DTO.
      * Automatically maps audit fields (createdAt, updatedAt, etc.)
      */
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "createdBy", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "createdAt", source = "audit.createdAt")
+    @Mapping(target = "createdBy", source = "audit.createdBy")
+    @Mapping(target = "updatedAt", source = "audit.updatedAt")
+    @Mapping(target = "updatedBy", source = "audit.updatedBy")
     UserDto toDto(User entity);
 
     @Mapping(target = "fullname", source = "fullName")

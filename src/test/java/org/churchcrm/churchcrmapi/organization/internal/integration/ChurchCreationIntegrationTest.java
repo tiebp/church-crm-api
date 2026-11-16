@@ -1,22 +1,29 @@
-package org.churchcrm.churchcrmapi.organization.internal.integration;
+package org.churchcrm.churchcrmapi.organization.internal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import net.datafaker.Faker;
+import org.churchcrm.churchcrmapi.identity.UserDto;
+import org.churchcrm.churchcrmapi.identity.internal.IUserService;
 import org.churchcrm.churchcrmapi.organization.AddressDto;
 import org.churchcrm.churchcrmapi.organization.ChurchDto;
 import org.churchcrm.churchcrmapi.organization.CreateChurchDto;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -28,6 +35,9 @@ class ChurchCreationIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private IUserService userService;
 
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
@@ -112,30 +122,43 @@ class ChurchCreationIntegrationTest {
                 .andExpect(header().doesNotExist("Location"));
     }
 
-//    @Test
-//    void createChurch_ShouldCreateAdminUser_WhenChurchCreated() throws Exception {
-//        // Given
-//        var dto = new CreateChurchDto("Admin Test Church", "admin.church", "adminuser", "admin@example.com", "Admin User", null);
-//
-//        // When/Then
-//        var response = mockMvc.perform(post("/churches")
-//                        .contentType("application/json")
-//                        .content(objectMapper.writeValueAsString(dto)))
-//                .andExpect(status().isCreated())
-//                .andReturn();
-//
-//        // Verify admin user was created in database
-//        String responseBody = response.getResponse().getContentAsString();
-//        ChurchDto createdChurch = objectMapper.readValue(responseBody, ChurchDto.class);
-//
-//        // Verify user exists in database with correct details
-//        var users = userRepository.findByChurchId(createdChurch.id());
-//        assertThat(users).hasSize(1);
-//
-//        var adminUser = users.get(0);
-//        assertThat(adminUser.getId()).isEqualTo("admin@example.com"); // Keycloak user ID is the primary key
-//        assertThat(adminUser.getFullname()).isEqualTo("Admin User");
-//        assertThat(adminUser.getEmail()).isEqualTo("admin@example.com");
-//        assertThat(adminUser.getChurchId()).isEqualTo(createdChurch.id());
-//        }
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void createChurch_ShouldCreateAdminUser_WhenChurchCreated() throws Exception {
+        // Given
+        var faker = new Faker();
+        var hostName = "admin-" + UUID.randomUUID().toString().substring(0, 8) + ".church";
+        var username = faker.internet().emailAddress();
+        var fullName = faker.name().fullName();
+        var dto = new CreateChurchDto("Admin Test Church", hostName, username, username, fullName, null);
+
+        // When
+        var response = mockMvc.perform(post("/churches")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        // Then - ChurchCreated is handled asynchronously after the transaction commits
+        ChurchDto createdChurch = objectMapper.readValue(
+                response.getResponse().getContentAsString(), ChurchDto.class);
+        UserDto adminUser = awaitUser(username);
+
+        assertThat(adminUser).isNotNull();
+        assertThat(adminUser.username()).isEqualTo(username);
+        assertThat(adminUser.fullname()).isEqualTo(fullName);
+        assertThat(adminUser.email()).isEqualTo(username);
+        assertThat(adminUser.churchId()).isEqualTo(createdChurch.id());
+    }
+
+    private UserDto awaitUser(String email) throws InterruptedException {
+        for (int attempt = 0; attempt < 50; attempt++) {
+            var user = userService.getByEmail(email);
+            if (user != null) {
+                return user;
+            }
+            Thread.sleep(200);
+        }
+        return null;
+    }
 }

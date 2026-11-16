@@ -139,6 +139,23 @@ resource "keycloak_openid_audience_protocol_mapper" "audience_mapper" {
   add_to_id_token          = false
 }
 
+# Keycloak 26.8.2+ enforces an audience check on the Admin REST API.
+# Service-account tokens must carry the kc-admin-api scope to be accepted.
+resource "keycloak_openid_client_default_scopes" "api_default_scopes" {
+  realm_id  = keycloak_realm.main.id
+  client_id = keycloak_openid_client.api.id
+
+  default_scopes = [
+    "web-origins",
+    "acr",
+    "profile",
+    "roles",
+    "basic",
+    "email",
+    "kc-admin-api",
+  ]
+}
+
 # Corresponds to CreateUiClient()
 resource "keycloak_openid_client" "ui" {
   realm_id                     = keycloak_realm.main.id
@@ -168,21 +185,23 @@ resource "keycloak_openid_user_attribute_protocol_mapper" "organization_mapper" 
 }
 
 # Corresponds to SetChurchApiClientAsUserManagement()
-data "keycloak_openid_client" "realm_management" {
+# Uses the SAML data source because Keycloak 26 returns 403 when reading the
+# client secret of internal clients such as realm-management. We only need the id.
+data "keycloak_saml_client" "realm_management" {
   realm_id  = keycloak_realm.main.id
   client_id = "realm-management"
 }
 
 data "keycloak_role" "manage_users" {
   realm_id  = keycloak_realm.main.id
-  client_id = data.keycloak_openid_client.realm_management.id
+  client_id = data.keycloak_saml_client.realm_management.id
   name      = "manage-users"
 }
 
 resource "keycloak_openid_client_service_account_role" "admin_permission_create_user" {
   realm_id                = keycloak_realm.main.id
   service_account_user_id = keycloak_openid_client.api.service_account_user_id
-  client_id               = data.keycloak_openid_client.realm_management.id
+  client_id               = data.keycloak_saml_client.realm_management.id
   role                    = data.keycloak_role.manage_users.name
 }
 

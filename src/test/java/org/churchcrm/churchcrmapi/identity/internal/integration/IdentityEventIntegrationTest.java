@@ -1,0 +1,45 @@
+package org.churchcrm.churchcrmapi.identity.internal.integration;
+
+import net.datafaker.Faker;
+import org.churchcrm.churchcrmapi.identity.internal.IUserService;
+import org.churchcrm.churchcrmapi.organization.ChurchCreated;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.modulith.test.ApplicationModuleTest;
+import org.springframework.modulith.test.Scenario;
+import org.springframework.security.test.context.support.WithMockUser;
+
+import java.util.UUID;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+@ApplicationModuleTest
+class IdentityEventIntegrationTest {
+
+    @Autowired
+    private IUserService userService;
+
+    @Test
+    @WithMockUser(username = "user")
+    void shouldCreateUserWhenChurchCreatedEventArrives(Scenario scenario) {
+        UUID churchId = UUID.randomUUID();
+        var faker = new Faker();
+        var username = faker.internet().emailAddress();
+        var fullName = faker.name().fullName();
+
+        var event = new ChurchCreated(
+                churchId,
+                fullName,
+                username,
+                username,
+                fullName);
+
+        scenario.publish(event)
+                .andWaitForStateChange(() -> userService.getByEmail(event.getUserName()))
+                .andVerify(user -> {
+                    assertThat(user).isNotNull();
+                    assertThat(user.username()).isEqualTo(username);
+                    assertThat(user.email()).isEqualTo(username);
+                });
+    }
+}
