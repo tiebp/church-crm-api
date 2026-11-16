@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.UUID;
 import jakarta.ws.rs.core.Response;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 public interface IUserService {
     void createUser(ChurchCreated event);
@@ -44,29 +43,28 @@ class UserService implements IUserService {
     public void createUser(ChurchCreated event) {
         var userDto = this.mapper.toDto(event);
         var created = this.createUser(userDto, event.getChurchId(), true);
-
+        
         // Publish UserCreated event
         var userEvent = mapper.toUserCreated(created);
         eventPublisher.publishEvent(userEvent);
     }
 
     @Override
-    @Transactional
     public UserDto createUser(CreateUserDto dto, UUID organizationId, boolean firstUser) {
         // Validation - check uniqueness constraints
-        if (repository.existsByUsernameAndChurchId(dto.getUsername(), organizationId)) {
+        if (repository.existsByUsernameAndChurchId(dto.username(), organizationId)) {
             throw new ConflictException(
                 "User with this username already exists in this organization",
                 "username",
-                dto.getUsername()
+                dto.username()
             );
         }
 
-        if (repository.existsByEmailAndChurchId(dto.getEmail(), organizationId)) {
+        if (repository.existsByEmailAndChurchId(dto.email(), organizationId)) {
             throw new ConflictException(
                 "User with this email already exists in this organization",
                 "email",
-                dto.getEmail()
+                dto.email()
             );
         }
 
@@ -74,9 +72,9 @@ class UserService implements IUserService {
 
         // Create user in Keycloak first
         String keycloakUserId = createKeycloakUser(
-            dto.getUsername(),
-            dto.getEmail(),
-            dto.getFullname(),
+            dto.username(),
+            dto.email(),
+            dto.fullname(),
             organizationId,
             groups
         );
@@ -127,8 +125,8 @@ class UserService implements IUserService {
             // Extract created user ID from Location header
             String location = response.getLocation().toString();
             String userId = location.substring(location.lastIndexOf("/") + 1);
-
-            log.info("User created successfully in Keycloak: username={}, organization-id={}, groups={}",
+            
+            log.info("User created successfully in Keycloak: username={}, organization-id={}, groups={}", 
                 username, organizationId, groups);
             return userId;
         }
@@ -138,18 +136,18 @@ class UserService implements IUserService {
     public UserDto getById(UUID id, UUID organizationId) {
         User user = repository.findById(id)
             .orElseThrow(() -> new NotFoundException("User", id));
-
+        
         // Security: verify organization match
         if (!user.getChurchId().equals(organizationId)) {
             throw new NotFoundException("User", id);  // 404, not 403
         }
-
+        
         return mapper.toDto(user);
     }
 
     @Override
     public UserDto getByEmail(String email) {
-        return repository.findByEmail(email)
+        return repository.findFirstByEmail(email)
             .map(mapper::toDto)
             .orElse(null);
     }
@@ -184,7 +182,7 @@ class UserService implements IUserService {
         CredentialRepresentation credential = new CredentialRepresentation();
         credential.setType(CredentialRepresentation.PASSWORD);
         credential.setValue("password");
-        credential.setTemporary(false);
+        credential.setTemporary(true);
 
         user.setCredentials(Collections.singletonList(credential));
     }

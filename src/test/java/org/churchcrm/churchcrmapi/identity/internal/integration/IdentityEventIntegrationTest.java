@@ -12,7 +12,6 @@ import org.springframework.security.test.context.support.WithMockUser;
 import java.util.UUID;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.mockito.Mockito.verify;
 
 @ApplicationModuleTest
 class IdentityEventIntegrationTest {
@@ -37,8 +36,10 @@ class IdentityEventIntegrationTest {
 
         scenario.publish(event)
                 .andWaitForStateChange(() -> userService.getByEmail(event.getUserName()))
-                .andVerify(user -> assertThat(user).isNotNull());
-
-        verify(userService).createUser(event);
+                .andVerify(user -> {
+                    assertThat(user).isNotNull();
+                    assertThat(user.username()).isEqualTo(username);
+                    assertThat(user.email()).isEqualTo(username);
+                });
     }
 }

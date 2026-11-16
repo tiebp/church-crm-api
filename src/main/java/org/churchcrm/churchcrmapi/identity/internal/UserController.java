@@ -11,13 +11,11 @@ import lombok.RequiredArgsConstructor;
 import org.churchcrm.churchcrmapi.crosscutting.web.OrganizationId;
 import org.churchcrm.churchcrmapi.identity.CreateUserDto;
 import org.churchcrm.churchcrmapi.identity.UserDto;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 import java.util.UUID;
@@ -41,7 +39,7 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
         summary = "Create user",
-        description = "Creates a new user in the organization. Users are created with default password 'password' and assigned to USERS group.",
+        description = "Creates a new user in the organization. Users are created with a temporary password 'password' that must be reset on first login and assigned to the USERS group.",
         security = @SecurityRequirement(name = "bearer-jwt")
     )
     @ApiResponses(value = {

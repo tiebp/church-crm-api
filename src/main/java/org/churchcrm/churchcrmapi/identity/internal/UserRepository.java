@@ -17,4 +17,6 @@ interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByUsernameAndChurchId(String username, UUID churchId);
     
     boolean existsByEmailAndChurchId(String email, UUID churchId);
+
+    Optional<User> findFirstByEmail(String email);
 }

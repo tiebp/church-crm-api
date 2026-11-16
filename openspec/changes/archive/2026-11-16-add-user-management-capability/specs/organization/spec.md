@@ -1,6 +1,6 @@
 # organization Specification Delta
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Church Creation with Admin User
 The system SHALL create an admin user automatically when a church is created, assigned to the ADMIN group.
