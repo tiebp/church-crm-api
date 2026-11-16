@@ -1,0 +1,45 @@
+schema: spec-driven
+
+context: |
+  Church CRM API is a multi-tenant Spring Boot REST API for church organizations.
+  Each church is an organization; all data access MUST be organization-scoped.
+  Data outside the caller's organization MUST return 404 (NotFoundException),
+  never 403, so resource existence is not leaked.
+
+  Code follows Spring Modulith boundaries: public API in `{module}/`, implementation
+  in `{module}.internal/`. Entities use UUID primary keys, an embedded `Audit` field,
+  and composition instead of inheritance. API DTOs are immutable records; MapStruct
+  handles entity/DTO/event mapping and cross-module communication uses domain events.
+  Keycloak provides authentication and user lifecycle management.
+
+  PostgreSQL with Flyway migrations is the source of truth for schema and
+  database-level business constraints. Never log or expose secrets or sensitive data.
+
+rules:
+  proposal:
+    - Identify affected modules and any impact on organization scoping, Keycloak user lifecycle, or database-enforced business rules.
+  specs:
+    - Specify organization-scoped access and the 404-not-403 behavior for unauthorized access.
+    - Specify input validation rules and database-enforced business constraints.
+    - Specify audit requirements (createdBy, createdAt, updatedBy, updatedAt) for mutable entities.
+  design:
+    - Respect Spring Modulith module boundaries and hexagonal separation between public contracts and `{module}.internal/` implementations.
+    - Use immutable record DTOs, UUID ids with an embedded `Audit`, composition over inheritance, and MapStruct mapping.
+    - Cover security, validation, database constraints, and cross-module event behavior.
+    - Address fields are optional in creation DTOs; use null when no address is provided.
+  tasks:
+    - Include unit, integration, Modulith, and ArchUnit test tasks where applicable.
+    - Ensure all 8 ArchUnit rules pass.
+    - Follow existing Lombok, MapStruct, package-private service/repository, and naming conventions.
+
+operations:
+  apply:
+    guidance:
+      - Follow AGENTS.md templates and existing module patterns.
+      - Run `./mvnw clean compile` and `./mvnw test -Dtest=ArchitectureTest` before considering work complete.
+      - Run the full `./mvnw test` suite when behavior changes; integration tests require PostgreSQL and Keycloak.
+      - Never log or expose secrets or sensitive data.
+  archive:
+    guidance:
+      - Confirm all tasks are complete and the implemented behavior matches the archived specs.
+      - Confirm all 8 ArchUnit rules and spec validation pass before archiving.
