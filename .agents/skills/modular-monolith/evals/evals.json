@@ -1,0 +1,50 @@
+{
+  "skill_name": "modular-monolith",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We have a Spring Modulith app with order, inventory, and notification modules. Add order cancellation: cancelling an order should restock inventory and send a customer notification. Where should the code live, and how should the modules communicate without creating coupling?",
+      "expected_output": "Feature placed in the order module, OrderCanceled event in the order API, inventory and notification modules react with @ApplicationModuleListener, no direct cross-module bean injection, architecture verification still passes, and tests use @ApplicationModuleTest/Scenario.",
+      "assertions": [
+        "Places cancellation logic in the order module",
+        "Publishes an OrderCancelled-style domain event from the order API/base package",
+        "Inventory reacts with an event listener and does not inject an order bean directly",
+        "Notification reacts with an event listener and does not inject an order bean directly",
+        "Keeps ApplicationModules.verify() enabled and expects no dependency cycle",
+        "Mentions @ApplicationModuleTest and/or Scenario for module-level tests",
+        "Addresses idempotency or failure/compensation for asynchronous listeners"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "ApplicationModules.verify() fails because billing and order depend on each other in a cycle. I need to ship this feature today. How do I fix the cycle without just disabling verification?",
+      "expected_output": "Explains the cycle, recommends inverting one direction via a domain event or extracting a shared concept, keeps verification enabled, and shows the concrete code/package changes.",
+      "assertions": [
+        "Identifies the billing/order relationship as a dependency cycle",
+        "Recommends inverting one direction via a domain event, shared contract, or coordinator",
+        "Explicitly avoids disabling verification globally",
+        "Shows concrete code and package changes, not just abstract advice",
+        "Keeps ApplicationModules.verify() in place and only allows narrow, temporary suppression if any",
+        "Warns that mutual event consumption can still create a type-level cycle",
+        "Mentions extracting a shared module as an alternative"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Write an integration test for the inventory module. It should verify that when an OrderCompleted event arrives, inventory is reduced, and that a StockShort event is published when there is not enough stock. We use Spring Modulith.",
+      "expected_output": "Uses @ApplicationModuleTest in the inventory package, mocks efferent dependencies with @MockitoBean if needed, uses the Scenario API or PublishedEvents/AssertablePublishedEvents, and avoids sleeps.",
+      "assertions": [
+        "Uses @ApplicationModuleTest in the inventory module package",
+        "Uses the Scenario API or PublishedEvents/AssertablePublishedEvents to verify events",
+        "Asserts that inventory is reduced after OrderCompleted",
+        "Asserts that StockShort is published when stock is insufficient",
+        "Avoids Thread.sleep and fixed-delay polling",
+        "Mocks efferent dependencies with @MockitoBean only where needed, or explains why none are needed",
+        "Places the test with the inventory module rather than in a global integration-test package"
+      ],
+      "files": []
+    }
+  ]
+}
