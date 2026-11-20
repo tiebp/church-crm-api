@@ -1,45 +1,106 @@
 schema: spec-driven
 
+# Project context (optional)
+# Shown to AI when creating artifacts. Keep it concise: project-wide facts and
+# constraints only. Do not duplicate ADRs; link them by number instead.
 context: |
-  Church CRM API is a multi-tenant Spring Boot REST API for church organizations.
-  Each church is an organization; all data access MUST be organization-scoped.
-  Data outside the caller's organization MUST return 404 (NotFoundException),
-  never 403, so resource existence is not leaked.
+  Project: church-crm-api — multi-tenant church CRM backend (modular monolith REST API).
 
-  Code follows Spring Modulith boundaries: public API in `{module}/`, implementation
-  in `{module}.internal/`. Entities use UUID primary keys, an embedded `Audit` field,
-  and composition instead of inheritance. API DTOs are immutable records; MapStruct
-  handles entity/DTO/event mapping and cross-module communication uses domain events.
-  Keycloak provides authentication and user lifecycle management.
+  Tech stack:
+  - Java 21, Spring Boot 4.0.1, Spring Modulith 2.0.1, Maven wrapper (./mvnw)
+  - PostgreSQL + Flyway (schema-per-module); Hibernate ddl-auto is none
+  - Keycloak 26: OAuth2 resource server for JWT auth and Admin Client for user lifecycle
+  - MapStruct 1.6, Lombok, SpringDoc OpenAPI, ArchUnit 1.3, JUnit 5/Mockito, Datafaker
+  - Terraform (mrparkers/keycloak) provisions the realm, clients, roles, and groups
 
-  PostgreSQL with Flyway migrations is the source of truth for schema and
-  database-level business constraints. Never log or expose secrets or sensitive data.
+  Architecture — docs/adr/ is the source of truth (ADRs 0001-0017). Link ADRs by
+  number instead of restating decisions. Style: modular monolith with hexagonal
+  layering inside each module (domain, application, infrastructure).
+  - ADR-0001: modular monolith; each direct subpackage is a Spring Modulith module
+  - ADR-0002: public module API in `{module}/`, implementation in `{module}.internal/`
+  - ADR-0003: each church IS the tenant; Church.id is the organization_id
+  - ADR-0004: tenant comes from the JWT `organization_id` claim via @OrganizationId UUID
+  - ADR-0005: cross-tenant access returns 404 (NotFoundException), never 403
+  - ADR-0006: Keycloak OAuth2 resource server; roles from resource_access; @PreAuthorize
+  - ADR-0007: users are provisioned in Keycloak and mirrored in identity.users; the Keycloak UUID is the PK
+  - ADR-0008: provisioned users get a temporary default password (provisional security debt)
+  - ADR-0009: Flyway is the schema source of truth; the database enforces business constraints
+  - ADR-0010: entities use UUID PKs, an embedded `Audit` named `audit`, and no inheritance
+  - ADR-0011: API DTOs are immutable records; MapStruct maps entity/DTO/event
+  - ADR-0012: cross-module workflows use domain events and the Modulith JDBC registry
+  - ADR-0013: errors use RFC 9457 ProblemDetail via base exceptions and GlobalExceptionHandler
+  - ADR-0014: eight ArchUnit rules enforce entity, controller, and @OrganizationId conventions
+  - ADR-0015: SpringDoc OpenAPI with a global bearer-jwt security scheme
+  - ADR-0016: four test levels — unit, integration (real PostgreSQL; Keycloak for identity flows), module, ArchUnit
+  - ADR-0017: Maven plus multi-stage Docker, GitHub Actions, and Terraform-provisioned Keycloak
 
+  Domain: multi-tenant church administration (churches, congregations, users; members,
+  families, groups, events, and donations later). Data outside the caller's organization
+  MUST return 404, never 403, so resource existence is not leaked.
+
+  Conventions:
+  - English for code, identifiers, comments, docs, ADRs, commit messages, and test names
+  - Organization-scoped services always compare the JWT org id to the entity's church/org id
+  - Controllers return ResponseEntity<T>; @OrganizationId parameters are UUID
+  - Services, repositories, mappers, and controllers live in `{module}.internal/`
+  - Package-private services and repositories unless a framework requires public visibility
+  - Address is optional in creation DTOs; use null when no address is provided
+  - Never log or expose secrets, tokens, passwords, or personal data
+  - New entities require a Flyway migration with matching audit columns and constraints
+  - Definition of done: ./mvnw clean compile, ArchitectureTest, and the relevant tests pass
+
+  Workflow:
+  - Feature branches from main with PR review; descriptive conventional-commit messages
+  - New code follows AGENTS.md templates and the existing module patterns
+  - Before committing, run ./mvnw clean compile and ./mvnw test -Dtest=ArchitectureTest
+
+  Current status: church creation and user management are implemented, including Keycloak
+  provisioning and the ChurchCreated -> identity event flow. Known gaps are tracked in
+  docs/adr/README.md (CORS, actuator/health, pagination, event retry/DLQ, secret management,
+  and the missing cross-schema FK on users.church_id).
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
 rules:
   proposal:
-    - Identify affected modules and any impact on organization scoping, Keycloak user lifecycle, or database-enforced business rules.
+    - Link relevant ADRs from docs/adr/ in the Why section; do not restate decisions already recorded there
+    - Keep a Non-goals bullet list under What Changes
+    - Identify affected modules and any impact on organization scoping, Keycloak user lifecycle, or database-enforced business rules
+    - State whether the change needs a Flyway migration, a new cross-module event, or both
   specs:
-    - Specify organization-scoped access and the 404-not-403 behavior for unauthorized access.
-    - Specify input validation rules and database-enforced business constraints.
-    - Specify audit requirements (createdBy, createdAt, updatedBy, updatedAt) for mutable entities.
+    - Every requirement needs at least one `#### Scenario:` with bullet GIVEN, WHEN, and THEN lines
+    - Specify organization-scoped access and the 404-not-403 behavior for unauthorized access
+    - Specify input validation rules and database-enforced business constraints; name the required migration when the schema changes
+    - Specify audit requirements (createdBy, createdAt, updatedBy, updatedAt) for mutable entities
+    - State the required role or authority for each endpoint and whether it is organization-scoped
+    - Use the delta format (ADDED for new capabilities, MODIFIED/REMOVED for existing ones)
   design:
-    - Respect Spring Modulith module boundaries and hexagonal separation between public contracts and `{module}.internal/` implementations.
-    - Use immutable record DTOs, UUID ids with an embedded `Audit`, composition over inheritance, and MapStruct mapping.
-    - Cover security, validation, database constraints, and cross-module event behavior.
-    - Address fields are optional in creation DTOs; use null when no address is provided.
+    - Always include a Non-Goals section
+    - Reference ADRs by number instead of re-deriving architectural rationale
+    - Respect Spring Modulith module boundaries and the public API vs `{module}.internal/` split
+    - Use immutable record DTOs, UUID ids with an embedded `Audit`, composition over inheritance, and MapStruct mapping
+    - Cover security, validation, database constraints, and cross-module event behavior
+    - Explicitly address ADR-0003 (tenant), ADR-0004 (org scope), ADR-0005 (404), and ADR-0012 (events) when relevant
+    - Address fields are optional in creation DTOs; use null when no address is provided
   tasks:
-    - Include unit, integration, Modulith, and ArchUnit test tasks where applicable.
-    - Ensure all 8 ArchUnit rules pass.
-    - Follow existing Lombok, MapStruct, package-private service/repository, and naming conventions.
+    - Break tasks into chunks of max ~2 hours
+    - Include unit, integration, Modulith, and ArchUnit test tasks where applicable
+    - Every new or changed endpoint needs integration tests and must satisfy the 8 ArchUnit rules
+    - Place Flyway migrations and public contracts (DTOs/events) before their consumers
+    - "End every change with verification tasks: ./mvnw clean compile, ./mvnw test -Dtest=ArchitectureTest, and the relevant test suite"
+    - Run the full ./mvnw test suite when behavior changes; integration tests require PostgreSQL and Keycloak
+    - Follow existing Lombok, MapStruct, package-private service/repository, and naming conventions
 
+# Per-operation advisory guidance (optional)
 operations:
   apply:
     guidance:
-      - Follow AGENTS.md templates and existing module patterns.
-      - Run `./mvnw clean compile` and `./mvnw test -Dtest=ArchitectureTest` before considering work complete.
-      - Run the full `./mvnw test` suite when behavior changes; integration tests require PostgreSQL and Keycloak.
-      - Never log or expose secrets or sensitive data.
+      - Follow AGENTS.md templates and the existing module patterns
+      - Run ./mvnw clean compile and ./mvnw test -Dtest=ArchitectureTest before considering work complete
+      - Run the full ./mvnw test suite when behavior changes; integration tests require PostgreSQL and Keycloak
+      - Never log or expose secrets or sensitive data
   archive:
     guidance:
-      - Confirm all tasks are complete and the implemented behavior matches the archived specs.
-      - Confirm all 8 ArchUnit rules and spec validation pass before archiving.
+      - Confirm all tasks are complete and the implemented behavior matches the archived specs
+      - Confirm all 8 ArchUnit rules and spec validation pass before archiving
+      - Update docs/adr/README.md known gaps if the change resolves or introduces one
