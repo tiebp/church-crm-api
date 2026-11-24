@@ -1,0 +1,169 @@
+###
+### Church CMS API - Membership Status Requests
+### Use with IntelliJ IDEA HTTP Client or VS Code REST Client extension
+###
+
+### ===== CONFIGURATION =====
+@keycloak_url = http://localhost:8080
+@api_url = http://localhost:8081
+@realm = church-cms
+@client_id = church-cms-ui
+@client_secret = 27074815-E8EF-469A-A183-DE11B802F90B
+@username = john.doe
+@password = 12345
+
+### ===== AUTHENTICATION =====
+
+### 1. Get Access Token from Keycloak (requires ADMIN role for POST)
+# @name getToken
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password
+&client_id={{client_id}}
+&client_secret={{client_secret}}
+&username={{username}}
+&password={{password}}
+&scope=email
+
+> {% client.global.set("access_token", response.body.access_token); %}
+
+### ===== CREATE MEMBERSHIP STATUSES =====
+
+### 2. Create a custom membership status (requires ADMIN)
+### The church is taken from the JWT organization_id claim.
+### Any churchId sent in the body is ignored.
+# @name createStatus
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "code": "visitor",
+  "label": "Visitor",
+  "description": "First-time or occasional visitor",
+  "sortOrder": 35,
+  "isDefault": false
+}
+
+> {% client.global.set("status_id", response.body.id); %}
+
+### 3. Create a status with defaults applied
+### Omitted sortOrder defaults to 0, isDefault to false, and active to true.
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "code": "new_convert",
+  "label": "New Convert"
+}
+
+### 4. Create the church's default status
+### Fails with 409 if the church already has a default status (e.g. the seeded "guest").
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "code": "active_member",
+  "label": "Active Member",
+  "description": "Actively participating member",
+  "sortOrder": 5,
+  "isDefault": true
+}
+
+### ===== READ MEMBERSHIP STATUSES =====
+
+### 5. List all statuses for the caller's church
+### Includes inactive statuses, ordered by sortOrder ascending.
+GET {{api_url}}/membership/statuses
+Authorization: Bearer {{access_token}}
+
+### 6. Get a membership status by ID
+### Uses status_id captured from request #2.
+GET {{api_url}}/membership/statuses/{{status_id}}
+Authorization: Bearer {{access_token}}
+
+### 7. Get a missing status (Should return 404)
+GET {{api_url}}/membership/statuses/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{access_token}}
+
+### ===== ERROR SCENARIOS =====
+
+### 8. Invalid code - uppercase (Should return 400 with fieldErrors.code)
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "code": "Visitor",
+  "label": "Visitor"
+}
+
+### 9. Blank label (Should return 400 with fieldErrors.label)
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "code": "visitor",
+  "label": "   "
+}
+
+### 10. Negative sort order (Should return 400 with fieldErrors.sortOrder)
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "code": "visitor",
+  "label": "Visitor",
+  "sortOrder": -1
+}
+
+### 11. Duplicate code in the same church (Should return 409 with conflictType=code)
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "code": "visitor",
+  "label": "Visitor Again"
+}
+
+### 12. Unauthenticated request (Should return 401)
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+
+{
+  "code": "visitor",
+  "label": "Visitor"
+}
+
+### 13. Authenticated without ADMIN role (Should return 403)
+### Get a token for a regular user first.
+# @name getUserToken
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password
+&client_id={{client_id}}
+&client_secret={{client_secret}}
+&username=admin
+&password=admin
+&scope=email
+
+> {% client.global.set("user_token", response.body.access_token); %}
+
+###
+POST {{api_url}}/membership/statuses
+Content-Type: application/json
+Authorization: Bearer {{user_token}}
+
+{
+  "code": "visitor",
+  "label": "Visitor"
+}
+
+###
