@@ -1,0 +1,206 @@
+###
+### Church CMS API - Family Requests
+### Use with IntelliJ IDEA HTTP Client or VS Code REST Client extension
+###
+
+### ===== CONFIGURATION =====
+@keycloak_url = http://localhost:8080
+@api_url = http://localhost:8081
+@realm = church-cms
+@client_id = church-cms-ui
+@client_secret = 27074815-E8EF-469A-A183-DE11B802F90B
+### The realm's default user has no ADMIN role; any authenticated user may create a family.
+@username = john.doe
+@password = 12345
+
+### ===== AUTHENTICATION =====
+
+### 1. Get Access Token from Keycloak
+### The church is taken from the JWT organization_id claim; no specific role is required.
+# @name getToken
+POST {{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password
+&client_id={{client_id}}
+&client_secret={{client_secret}}
+&username={{username}}
+&password={{password}}
+&scope=email
+
+> {% client.global.set("access_token", response.body.access_token); %}
+
+### ===== CREATE FAMILIES =====
+
+### 2. Create a family with only the required name (Should return 201)
+### churchId, address, and weddingDate are omitted.
+# @name createFamily
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Doe"
+}
+
+> {% client.global.set("family_id", response.body.id); %}
+
+### 3. Create a family with a complete address and wedding date (Should return 201)
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Smith",
+  "address": {
+    "line1": "123 Main Street",
+    "line2": "Suite 100",
+    "city": "Springfield",
+    "state": "Illinois",
+    "country": "United States",
+    "postalCode": "62701"
+  },
+  "weddingDate": "2005-06-18"
+}
+
+### 4. Request churchId is ignored (Should return 201 for the JWT's church)
+### Change the churchId below to any other UUID; the response churchId stays the caller's.
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "churchId": "00000000-0000-0000-0000-000000000000",
+  "name": "Johnson"
+}
+
+### 5. Name is trimmed (Should return 201 with "Brown")
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "   Brown   "
+}
+
+### ===== ERROR SCENARIOS =====
+
+### 6. Name too short after trimming (Should return 400 with fieldErrors.name)
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "  Al  "
+}
+
+### 7. Name too long (Should return 400 with fieldErrors.name)
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+
+### 8. Blank name (Should return 400 with fieldErrors.name)
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "   "
+}
+
+### 9. Missing address.line1 (Should return 400 with fieldErrors['address.line1'])
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Doe Family",
+  "address": {
+    "city": "Springfield"
+  }
+}
+
+### 10. Missing address.city (Should return 400 with fieldErrors['address.city'])
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Doe Family",
+  "address": {
+    "line1": "123 Main Street"
+  }
+}
+
+### 11. Too-short optional address field (Should return 400 with fieldErrors['address.line2'])
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Doe Family",
+  "address": {
+    "line1": "123 Main Street",
+    "line2": "ab",
+    "city": "Springfield"
+  }
+}
+
+### 12. Empty optional address fields are stored as null (Should return 201)
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Williams",
+  "address": {
+    "line1": "456 Oak Avenue",
+    "line2": "",
+    "city": "Springfield",
+    "state": "   ",
+    "country": "",
+    "postalCode": ""
+  }
+}
+
+### 13. Malformed weddingDate (Should return 400)
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "Doe Family",
+  "weddingDate": "18/06/2005"
+}
+
+### 14. Duplicate name in the same church (Should return 409 with conflictType=name)
+### Request #2 created "Doe"; this case-variant must be rejected.
+POST {{api_url}}/membership/families
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "name": "doe"
+}
+
+### 15. Unauthenticated request (Should return 401)
+POST {{api_url}}/membership/families
+Content-Type: application/json
+
+{
+  "name": "Doe"
+}
+
+### ===== NO READ ENDPOINT =====
+
+### 16. Only POST /membership/families is exposed (GET returns no family data and is not 403)
+GET {{api_url}}/membership/families/{{family_id}}
+Authorization: Bearer {{access_token}}
+
+### To verify the same name is allowed in another church, obtain a token with an
+### organization_id claim for a different church and repeat request #2 with "Doe".
+###

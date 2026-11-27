@@ -17,15 +17,6 @@
 # @keycloak_url = https://keycloak.yourdomain.com
 # @api_url = https://api.yourdomain.com
 
-### ===== API DOCUMENTATION =====
-
-### Swagger UI
-### Open in browser: http://localhost:8081/swagger-ui.html
-GET {{api_url}}/swagger-ui.html
-
-### OpenAPI Spec (JSON)
-GET {{api_url}}/api-docs
-
 ### ===== AUTHENTICATION =====
 
 ### 1. Get Access Token from Keycloak
